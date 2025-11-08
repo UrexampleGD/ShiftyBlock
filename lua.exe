@@ -336,10 +336,10 @@ local function toggleGUI()
     isOpen = not isOpen
     if isOpen then
         mainFrame.Visible = true
-        openCloseButton.Text = "☰"
+        openCloseButton.Text = "Close"
     else
         mainFrame.Visible = false
-        openCloseButton.Text = "☰"
+        openCloseButton.Text = "Open"
     end
 end
 
