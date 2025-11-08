@@ -12,6 +12,7 @@ local autoPunchEnabled = false
 local currentDistance = 4
 local lastBlockTime = 0
 local blockCooldown = 0.5
+local killerNames = {"c00lkidd", "Jason", "JohnDoe", "1x1x1x1", "Noli", "Slasher", "Sixer"}
 
 local function fireGuiBlock()
     local blockAction = "UseActorAbility"
@@ -26,10 +27,42 @@ local function fireGuiPunch()
     testRemote:FireServer(punchAction, punchData)
 end
 
-local function instantPunchAfterBlock()
-    if autoPunchEnabled and (tick() - lastBlockTime) < 0.3 then
-        fireGuiPunch()
+local function getNearestKiller()
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local closest, closestDist = nil, math.huge
+    local killersFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+    if not killersFolder then return nil end
+
+    for _, k in ipairs(killersFolder:GetChildren()) do
+        if k and k:IsA("Model") then
+            local hrp = k:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local d = (hrp.Position - myRoot.Position).Magnitude
+                if d < closestDist then
+                    closest, closestDist = k, d
+                end
+            end
+        end
     end
+    return closest
+end
+
+local function isKillerInRange()
+    local killer = getNearestKiller()
+    if not killer then return false end
+    
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+    
+    local hrp = killer:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    
+    local distance = (hrp.Position - myRoot.Position).Magnitude
+    return distance <= currentDistance
 end
 
 local soundHooks = {}
@@ -94,20 +127,20 @@ local function hookSound(sound)
     soundHooks[sound] = { id = preId }
 
     local playedConn = sound.Played:Connect(function()
-        if preId and autoBlockTriggerSounds[preId] then
+        if preId and autoBlockTriggerSounds[preId] and autoBlockEnabled and isKillerInRange() then
             fireGuiBlock()
             if autoPunchEnabled then
-                task.wait(0.1)
+                task.wait(0.2)
                 fireGuiPunch()
             end
         end
     end)
 
     local propConn = sound:GetPropertyChangedSignal("IsPlaying"):Connect(function()
-        if sound.IsPlaying and preId and autoBlockTriggerSounds[preId] then
+        if sound.IsPlaying and preId and autoBlockTriggerSounds[preId] and autoBlockEnabled and isKillerInRange() then
             fireGuiBlock()
             if autoPunchEnabled then
-                task.wait(0.1)
+                task.wait(0.2)
                 fireGuiPunch()
             end
         end
@@ -120,10 +153,10 @@ local function hookSound(sound)
         soundHooks[sound] = nil
     end)
 
-    if sound.IsPlaying and preId and autoBlockTriggerSounds[preId] then
+    if sound.IsPlaying and preId and autoBlockTriggerSounds[preId] and autoBlockEnabled and isKillerInRange() then
         fireGuiBlock()
         if autoPunchEnabled then
-            task.wait(0.1)
+            task.wait(0.2)
             fireGuiPunch()
         end
     end
@@ -344,17 +377,3 @@ local function toggleGUI()
 end
 
 openCloseButton.MouseButton1Click:Connect(toggleGUI)
-
-local function onBlockSuccess()
-    if autoPunchEnabled then
-        task.wait(0.05)
-        fireGuiPunch()
-    end
-end
-
-local blockSuccessConnection
-blockSuccessConnection = testRemote.OnClientEvent:Connect(function(action, data)
-    if action == "BlockSuccess" then
-        onBlockSuccess()
-    end
-end)
