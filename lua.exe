@@ -1,0 +1,360 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local lp = Players.LocalPlayer
+
+local testRemote = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent")
+
+local autoBlockEnabled = false
+local autoPunchEnabled = false
+local currentDistance = 4
+local lastBlockTime = 0
+local blockCooldown = 0.5
+
+local function fireGuiBlock()
+    local blockAction = "UseActorAbility"
+    local blockData = {buffer.fromstring("\"Block\"")}
+    testRemote:FireServer(blockAction, blockData)
+    lastBlockTime = tick()
+end
+
+local function fireGuiPunch()
+    local punchAction = "UseActorAbility"
+    local punchData = {buffer.fromstring("\"Punch\"")}
+    testRemote:FireServer(punchAction, punchData)
+end
+
+local function instantPunchAfterBlock()
+    if autoPunchEnabled and (tick() - lastBlockTime) < 0.3 then
+        fireGuiPunch()
+    end
+end
+
+local soundHooks = {}
+local autoBlockTriggerSounds = {
+    ["102228729296384"] = true,
+    ["140242176732868"] = true,
+    ["112809109188560"] = true,
+    ["136323728355613"] = true,
+    ["115026634746636"] = true,
+    ["84116622032112"] = true,
+    ["108907358619313"] = true,
+    ["127793641088496"] = true,
+    ["86174610237192"] = true,
+    ["95079963655241"] = true,
+    ["101199185291628"] = true,
+    ["119942598489800"] = true,
+    ["84307400688050"] = true,
+    ["113037804008732"] = true,
+    ["105200830849301"] = true,
+    ["75330693422988"] = true,
+    ["82221759983649"] = true,
+    ["81702359653578"] = true,
+    ["108610718831698"] = true,
+    ["112395455254818"] = true,
+    ["109431876587852"] = true,
+    ["109348678063422"] = true,
+    ["85853080745515"] = true,
+    ["12222216"] = true,
+    ["105840448036441"] = true,
+    ["114742322778642"] = true,
+    ["119583605486352"] = true,
+    ["79980897195554"] = true,
+    ["71805956520207"] = true,
+    ["79391273191671"] = true,
+    ["89004992452376"] = true,
+    ["101553872555606"] = true,
+    ["101698569375359"] = true,
+    ["106300477136129"] = true,
+    ["116581754553533"] = true,
+    ["117231507259853"] = true,
+    ["119089145505438"] = true,
+    ["121954639447247"] = true,
+    ["125213046326879"] = true,
+    ["131406927389838"] = true,
+    ["117173212095661"] = true,
+}
+
+local function extractNumericSoundId(sound)
+    if not sound then return nil end
+    local sid = sound.SoundId
+    if not sid then return nil end
+    sid = (type(sid) == "string") and sid or tostring(sid)
+    local num = string.match(sid, "rbxassetid://(%d+)") or string.match(sid, "://(%d+)") or string.match(sid, "^(%d+)$")
+    return num
+end
+
+local function hookSound(sound)
+    if not sound or not sound:IsA("Sound") then return end
+    if soundHooks[sound] then return end
+
+    local preId = extractNumericSoundId(sound)
+    soundHooks[sound] = { id = preId }
+
+    local playedConn = sound.Played:Connect(function()
+        if preId and autoBlockTriggerSounds[preId] then
+            fireGuiBlock()
+            if autoPunchEnabled then
+                task.wait(0.1)
+                fireGuiPunch()
+            end
+        end
+    end)
+
+    local propConn = sound:GetPropertyChangedSignal("IsPlaying"):Connect(function()
+        if sound.IsPlaying and preId and autoBlockTriggerSounds[preId] then
+            fireGuiBlock()
+            if autoPunchEnabled then
+                task.wait(0.1)
+                fireGuiPunch()
+            end
+        end
+    end)
+
+    local destroyConn = sound.Destroying:Connect(function()
+        if playedConn then playedConn:Disconnect() end
+        if propConn then propConn:Disconnect() end
+        if destroyConn then destroyConn:Disconnect() end
+        soundHooks[sound] = nil
+    end)
+
+    if sound.IsPlaying and preId and autoBlockTriggerSounds[preId] then
+        fireGuiBlock()
+        if autoPunchEnabled then
+            task.wait(0.1)
+            fireGuiPunch()
+        end
+    end
+end
+
+local KillersFolder = workspace:WaitForChild("Players"):WaitForChild("Killers")
+for _, desc in ipairs(KillersFolder:GetDescendants()) do
+    if desc:IsA("Sound") then
+        hookSound(desc)
+    end
+end
+
+KillersFolder.DescendantAdded:Connect(function(desc)
+    if desc:IsA("Sound") then
+        hookSound(desc)
+    end
+end)
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoBlockGuest1337"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = lp:WaitForChild("PlayerGui")
+
+local openCloseButton = Instance.new("TextButton")
+openCloseButton.Name = "OpenCloseButton"
+openCloseButton.Size = UDim2.new(0, 40, 0, 40)
+openCloseButton.Position = UDim2.new(0, 10, 0, 10)
+openCloseButton.BackgroundColor3 = Color3.new(0, 0, 0)
+openCloseButton.BorderColor3 = Color3.new(0, 0.4, 1)
+openCloseButton.BorderSizePixel = 2
+openCloseButton.Text = "☰"
+openCloseButton.TextColor3 = Color3.new(0, 0.6, 1)
+openCloseButton.TextSize = 20
+openCloseButton.Font = Enum.Font.GothamBold
+openCloseButton.Parent = screenGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 300, 0, 200)
+mainFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+mainFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+mainFrame.BorderColor3 = Color3.new(0, 0.4, 1)
+mainFrame.BorderSizePixel = 2
+mainFrame.Parent = screenGui
+
+local gradientRotation = 0
+RunService.RenderStepped:Connect(function()
+    gradientRotation = (gradientRotation + 3) % 360
+    local r = math.rad(gradientRotation)
+    local mixedColor = Color3.new(0, 0.3 + 0.3 * math.cos(r), 0.8 + 0.2 * math.sin(r))
+    mainFrame.BorderColor3 = mixedColor
+    openCloseButton.BorderColor3 = mixedColor
+end)
+
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.new(0, 0, 0)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, 0, 1, 0)
+titleLabel.Position = UDim2.new(0, 0, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Auto Block Guest 1337"
+titleLabel.TextColor3 = Color3.new(0, 0.6, 1)
+titleLabel.TextSize = 16
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = titleBar
+
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "ContentFrame"
+contentFrame.Size = UDim2.new(1, -20, 1, -35)
+contentFrame.Position = UDim2.new(0, 10, 0, 30)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+local distanceLabel = Instance.new("TextLabel")
+distanceLabel.Name = "DistanceLabel"
+distanceLabel.Size = UDim2.new(1, 0, 0, 20)
+distanceLabel.Position = UDim2.new(0, 0, 0, 0)
+distanceLabel.BackgroundTransparency = 1
+distanceLabel.Text = "Block Distance:"
+distanceLabel.TextColor3 = Color3.new(1, 1, 1)
+distanceLabel.TextSize = 14
+distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+distanceLabel.Font = Enum.Font.Gotham
+distanceLabel.Parent = contentFrame
+
+local distanceBox = Instance.new("TextBox")
+distanceBox.Name = "DistanceBox"
+distanceBox.Size = UDim2.new(1, 0, 0, 25)
+distanceBox.Position = UDim2.new(0, 0, 0, 20)
+distanceBox.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+distanceBox.BorderColor3 = Color3.new(0, 0.4, 1)
+distanceBox.BorderSizePixel = 1
+distanceBox.Text = "4"
+distanceBox.TextColor3 = Color3.new(1, 1, 1)
+distanceBox.TextSize = 14
+distanceBox.PlaceholderText = "Enter distance"
+distanceBox.Font = Enum.Font.Gotham
+distanceBox.Parent = contentFrame
+
+distanceBox.FocusLost:Connect(function()
+    local text = distanceBox.Text
+    if text == "" or text == "0" then
+        currentDistance = 4
+        distanceBox.Text = "4"
+    else
+        local num = tonumber(text)
+        if num then
+            currentDistance = num
+        else
+            currentDistance = 4
+            distanceBox.Text = "4"
+        end
+    end
+end)
+
+local autoPunchButton = Instance.new("TextButton")
+autoPunchButton.Name = "AutoPunchButton"
+autoPunchButton.Size = UDim2.new(1, 0, 0, 35)
+autoPunchButton.Position = UDim2.new(0, 0, 0, 60)
+autoPunchButton.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+autoPunchButton.BorderColor3 = Color3.new(0.8, 0, 0)
+autoPunchButton.BorderSizePixel = 2
+autoPunchButton.Text = "Auto Punch: OFF"
+autoPunchButton.TextColor3 = Color3.new(1, 1, 1)
+autoPunchButton.TextSize = 14
+autoPunchButton.Font = Enum.Font.GothamBold
+autoPunchButton.Parent = contentFrame
+
+autoPunchButton.MouseButton1Click:Connect(function()
+    autoPunchEnabled = not autoPunchEnabled
+    if autoPunchEnabled then
+        autoPunchButton.BorderColor3 = Color3.new(0, 0.8, 0)
+        autoPunchButton.Text = "Auto Punch: ON"
+    else
+        autoPunchButton.BorderColor3 = Color3.new(0.8, 0, 0)
+        autoPunchButton.Text = "Auto Punch: OFF"
+    end
+end)
+
+local autoBlockButton = Instance.new("TextButton")
+autoBlockButton.Name = "AutoBlockButton"
+autoBlockButton.Size = UDim2.new(1, 0, 0, 35)
+autoBlockButton.Position = UDim2.new(0, 0, 0, 105)
+autoBlockButton.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+autoBlockButton.BorderColor3 = Color3.new(0.8, 0, 0)
+autoBlockButton.BorderSizePixel = 2
+autoBlockButton.Text = "Auto Block: OFF"
+autoBlockButton.TextColor3 = Color3.new(1, 1, 1)
+autoBlockButton.TextSize = 14
+autoBlockButton.Font = Enum.Font.GothamBold
+autoBlockButton.Parent = contentFrame
+
+autoBlockButton.MouseButton1Click:Connect(function()
+    autoBlockEnabled = not autoBlockEnabled
+    if autoBlockEnabled then
+        autoBlockButton.BorderColor3 = Color3.new(0, 0.8, 0)
+        autoBlockButton.Text = "Auto Block: ON"
+    else
+        autoBlockButton.BorderColor3 = Color3.new(0.8, 0, 0)
+        autoBlockButton.Text = "Auto Block: OFF"
+    end
+end)
+
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+local isOpen = true
+
+local function toggleGUI()
+    isOpen = not isOpen
+    if isOpen then
+        mainFrame.Visible = true
+        openCloseButton.Text = "☰"
+    else
+        mainFrame.Visible = false
+        openCloseButton.Text = "☰"
+    end
+end
+
+openCloseButton.MouseButton1Click:Connect(toggleGUI)
+
+local function onBlockSuccess()
+    if autoPunchEnabled then
+        task.wait(0.05)
+        fireGuiPunch()
+    end
+end
+
+local blockSuccessConnection
+blockSuccessConnection = testRemote.OnClientEvent:Connect(function(action, data)
+    if action == "BlockSuccess" then
+        onBlockSuccess()
+    end
+end)
