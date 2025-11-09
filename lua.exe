@@ -11,7 +11,7 @@ local autoBlockEnabled = false
 local autoPunchEnabled = false
 local currentDistance = 4
 local lastBlockTime = 0
-local blockCooldown = 0.5
+local blockCooldown = 0.2
 local killerNames = {"c00lkidd", "Jason", "JohnDoe", "1x1x1x1", "Noli", "Slasher", "Sixer"}
 
 local function fireGuiBlock()
